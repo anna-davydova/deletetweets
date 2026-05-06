@@ -11,8 +11,10 @@ try:
     config = configparser.ConfigParser()
     config.read(config_name, encoding='utf-8')
     try:
-        path = Path(config['data']['path'])
+        path = Path(config['data']['json_path'])
         count = int(config['data']['count_tweets'])
+        chrome_path = Path(config['data']['chrome_exe_path'])
+        profile_path = Path(config['data']['chrome_user_profile_path'])
     except KeyError as err:
         print(f"Missing required configuration key: {err}")
 except FileNotFoundError as err:
