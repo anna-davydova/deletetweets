@@ -5,7 +5,7 @@ def main():
     try:
         utils.clean_uc_cache()
         folder = utils.config.Path('tweets')
-        if not folder.exists() or not any(folder.glob('tweets[0-9].txt')):
+        if not folder.exists() or not any(folder.glob('tweets[0-9].json')):
             utils.split_json(folder)
         utils.delete_tweets(folder)
         print(utils.perf_counter() - start)

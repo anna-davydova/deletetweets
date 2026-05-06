@@ -43,8 +43,15 @@ def get_file_version(path: config.Path) -> int | None:
         return None
 
 
+def get_tweet_type(full_text: str) -> str:
+    if re.fullmatch(r"RT @.+", full_text):
+        return "retweet"
+    return "tweet"
+
+
 def split_json(folder: config.Path) -> None:
     try:
+        count = random.randint(20, 30)
         n = 1
         file_number = 1
         temp_tweets = []
@@ -53,15 +60,20 @@ def split_json(folder: config.Path) -> None:
             try:
                 data = json.load(file)
                 for tweet in data:
-                    temp_tweets.append(tweet["tweet"]["id"])
+                    dict_tweet = {"id": n,
+                                  "tweet_id": tweet["tweet"]["id"],
+                                  "type": get_tweet_type(tweet["tweet"]["full_text"]),
+                                  "status": None}
+                    temp_tweets.append(dict_tweet)
                     n += 1
-                    if len(temp_tweets) == config.count:
-                        with open(folder / f"tweets{file_number}.txt", mode="w", encoding="utf-8") as tweet_file:
-                            tweet_file.write('\n'.join(line for line in temp_tweets))
+                    if len(temp_tweets) == count:
+                        with open(folder / f"tweets{file_number}.json", mode="w", encoding="utf-8") as tweet_file:
+                            json.dump(temp_tweets, tweet_file, indent=2)
                             temp_tweets.clear()
+                            count = random.randint(20, 30)
                         file_number += 1
-                with open(folder / f"tweets{file_number}.txt", mode="w", encoding="utf-8") as tweet_file:
-                    tweet_file.write('\n'.join(line for line in temp_tweets))
+                with open(folder / f"tweets{file_number}.json", mode="w", encoding="utf-8") as tweet_file:
+                    json.dump(temp_tweets, tweet_file, indent=2)
                     temp_tweets.clear()
                 print("Success: File processed")
             except json.JSONDecodeError:
@@ -74,15 +86,15 @@ def split_json(folder: config.Path) -> None:
 def get_next_file() -> config.Path:
     log_file = config.Path("short.log")
     if not log_file.exists():
-        next_file = config.Path("tweets1.txt")
+        next_file = config.Path("tweets1.json")
     else:
         with open("short.log", encoding="utf-8") as file:
             data = file.readlines()
             if data:
                 number = int(re.search(r"\d+", data[-1].strip()).group())
-                next_file = config.Path(f"tweets{number + 1}.txt")
+                next_file = config.Path(f"tweets{number + 1}.json")
             else:
-                next_file = config.Path("tweets1.txt")
+                next_file = config.Path("tweets1.json")
     return next_file
 
 
