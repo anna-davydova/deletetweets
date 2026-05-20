@@ -13,6 +13,7 @@ import os
 import shutil
 import subprocess
 from contextlib import contextmanager
+from logger import logger
 
 
 def clean_uc_cache():
@@ -21,6 +22,7 @@ def clean_uc_cache():
     cache_path = os.path.join(os.environ.get('APPDATA', ''), 'undetected_chromedriver')
     if os.path.exists(cache_path):
         shutil.rmtree(cache_path)
+        logger.info("ChromeDriver cache has been successfully cleaned")
 
 
 def kill_chromedriver():
@@ -30,19 +32,22 @@ def kill_chromedriver():
                        check=False,
                        capture_output=True)
     except Exception as err:
-        print(f"Failed to terminate ChromeDriver processes: {err}")
+        logger.error(f"Failed to terminate ChromeDriver processes: {err}")
+        raise
 
 
-def get_chrome_version(path: config.Path) -> int | None:
+def get_chrome_version(path: config.Path) -> int:
     """Get Chrome version from .exe"""
     if not os.path.exists(path):
-        return None
+        logger.error("Invalid path to Chrome.exe. Check the config file.")
+        raise FileNotFoundError(f"Invalid path to Chrome.exe. Check the config file.")
     try:
         cmd = f'powershell "(Get-Item \'{path}\').VersionInfo.ProductVersion"'
         version_full = subprocess.check_output(cmd, shell=True).decode().strip()
         return int(version_full.split('.')[0])
-    except Exception:
-        return None
+    except Exception as err:
+        logger.error(f"Failed to get Chrome.exe version. Error: {err}")
+        raise
 
 
 def get_tweet_type(full_text: str) -> str:
@@ -95,39 +100,46 @@ def create_tweets_db():
             print(f"Error: Invalid path or filename. Please check your config.")
 
 
+def get_tweet_status(driver: uc.Chrome, url):
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located(
+            (By.XPATH, "//article[@data-testid='tweet'] | //div[@data-testid='error-detail']"))
+    )
+    errors = driver.find_elements(By.XPATH, "//div[@data-testid='error-detail']")
+
+    if errors:
+        logger.warning(f"Tweet {url} NOT FOUND (Skipping)")
+        return 'not found'
+    else:
+        logger.info(f"Tweet {url} IS ALIVE (Can be deleted)")
+        return 'deleted'
+
+
 def delete_tweets() -> None:
     options = uc.ChromeOptions()
     options.binary_location = str(config.chrome_path)
     options.add_argument(f"--user-data-dir={str(config.profile_path)}")
-    chrome_version = get_chrome_version(config.chrome_path)
+    chrome_version = get_chrome_version(config.chrome_path) if config.version is None else config.version
     with init_db() as conn:
         cur = conn.cursor()
+        count = random.randint(3, 5)
         cur.execute("""
                         SELECT id, type
                         FROM tweets
                         WHERE status IS NULL
                         LIMIT (?);
-                    """, (random.randint(3, 5),))
+                    """, (count,))
         tweets = cur.fetchall()
         if tweets:
+            logger.info(f"Fetched {count} tweets to delete")
             with uc.Chrome(options=options, version_main=chrome_version) as driver:
                 for tweet in tweets:
                     waiting = random.uniform(5, 10)
                     url = f"https://x.com/user/status/{tweet["id"]}"
+                    logger.info(f"Start checking tweet: {url}")
                     driver.get(url)
                     try:
-                        WebDriverWait(driver, 10).until(
-                            EC.presence_of_element_located(
-                                (By.XPATH, "//article[@data-testid='tweet'] | //div[@data-testid='error-detail']"))
-                        )
-                        errors = driver.find_elements(By.XPATH, "//div[@data-testid='error-detail']")
-
-                        if errors:
-                            print(f"Result: Tweet {tweet["id"]} NOT FOUND (Skipping)")
-                            status = 'not found'
-                        else:
-                            print(f"Result: Tweet {tweet["id"]} IS ALIVE (Can be deleted)")
-                            status = 'deleted'
+                        status = get_tweet_status(driver, url)
                         try:
                             with transaction(conn):
                                 cur.execute("""
@@ -136,10 +148,11 @@ def delete_tweets() -> None:
                                                 WHERE id = (?)
                                             """, (status, tweet["id"]))
                         except Exception as err:
-                            print(f"Failed to save tweet with ID {tweet["id"]} to the database: {err}")
+                            logger.error(f"Failed to save tweet {url} to the database. Error: {err}")
                         sleep(waiting)
                     except TimeoutException:
-                        print(f"Result: Timeout or unknown page state for {tweet["id"]}")
+                        logger.error(f"Timeout or unknown page for URL: {url}")
                         sleep(waiting)
         else:
-            print("All tweets have been deleted")
+            print("All tweets deleted")
+            logger.info("All tweets deleted")

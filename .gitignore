@@ -1,3 +1,5 @@
 .idea/
 /configuration.ini
 tweets.db*
+*.log
+__pycache__/

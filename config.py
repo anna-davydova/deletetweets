@@ -14,6 +14,7 @@ try:
         path = Path(config['data']['json_path'])
         chrome_path = Path(config['data']['chrome_exe_path'])
         profile_path = Path(config['data']['chrome_user_profile_path'])
+        version = int(config['data']['version']) if config['data']['version'].isdigit() else None
     except KeyError as err:
         print(f"Missing required configuration key: {err}")
 except FileNotFoundError as err:

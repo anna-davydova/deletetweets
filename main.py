@@ -8,7 +8,8 @@ def main():
             utils.create_tweets_db()
         utils.delete_tweets()
     except Exception as err:
-        print(err, err.__class__)
+        print(f"Script failed. Error: {err}")
+        utils.logger.error(f"Script failed. Error: {err}")
 
 
 if __name__ == '__main__':
