@@ -16,6 +16,16 @@ from contextlib import contextmanager
 from logger import logger
 
 
+def check_command(n: str, mode: str):
+    if mode == "Command":
+        if n.strip() in ("1", "2"):
+            return True
+    elif mode == "Count":
+        if n.strip().isdigit() and int(n) > 0:
+            return True
+    return False
+
+
 def clean_uc_cache():
     """Clean cache undetected_chromedriver"""
     kill_chromedriver()
