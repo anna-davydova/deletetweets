@@ -4,6 +4,7 @@ import config
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import TimeoutException
 import undetected_chromedriver as uc
 from time import sleep
@@ -125,6 +126,23 @@ def get_tweet_status(driver: uc.Chrome, url):
         return 'deleted'
 
 
+def scroll(driver: uc.Chrome):
+    urls = [
+        "https://x.com/home",
+        "https://x.com/explore",
+        "https://x.com/notifications"
+    ]
+    url = random.choice(urls)
+    driver.get(url)
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.TAG_NAME, "main"))
+    )
+    sleep(random.uniform(1, 2))
+    for i in range(random.randint(3, 7)):
+        ActionChains(driver).scroll_by_amount(0, random.randint(15, 30)).perform()
+        sleep(random.uniform(0.5, 1.5))
+
+
 def delete_tweets() -> None:
     options = uc.ChromeOptions()
     options.binary_location = str(config.chrome_path)
@@ -163,6 +181,7 @@ def delete_tweets() -> None:
                     except TimeoutException:
                         logger.error(f"Timeout or unknown page for URL: {url}")
                         sleep(waiting)
+                scroll(driver)
         else:
             print("All tweets deleted")
             logger.info("All tweets deleted")
