@@ -29,6 +29,7 @@ def main():
         utils.clean_uc_cache()
         if not utils.os.path.exists("tweets.db"):
             utils.create_tweets_db()
+        print("Start working...")
         start = utils.perf_counter()
         for i in range(count):
             utils.delete_tweets()
@@ -50,6 +51,7 @@ def main():
         print(f"Script failed. Error: {err}")
         utils.logger.error(f"Script failed. Error: {err}")
     finally:
+        print("Finished!")
         utils.logger.info("SCRIPT EXECUTION FINISHED")
         utils.logger.info("-" * 30)
 

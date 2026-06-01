@@ -169,6 +169,7 @@ def click_button(driver: uc.Chrome, mode: str):
         ],
         Button.DELETE: [
             "//div[@role='menuitem']//span[text()='Delete']",
+            "//span[text()='Delete']",
             "[data-testid='delete']"
         ],
         Button.CONFIRM: [
@@ -251,7 +252,7 @@ def delete_tweets() -> None:
     chrome_version = get_chrome_version(config.chrome_path) if config.version is None else config.version
     with init_db() as conn:
         cur = conn.cursor()
-        count = random.randint(3, 5)
+        count = random.randint(5, 10)
         cur.execute("""
                         SELECT id, type
                         FROM tweets
@@ -262,12 +263,13 @@ def delete_tweets() -> None:
         if tweets:
             logger.info(f"Fetched {count} tweets to delete")
             with uc.Chrome(options=options, version_main=chrome_version) as driver:
+                driver.set_page_load_timeout(30)
                 for tweet in tweets:
                     waiting = random.uniform(5, 10)
                     url = f"https://x.com/user/status/{tweet["id"]}"
                     logger.info(f"Start checking tweet: {url}")
-                    driver.get(url)
                     try:
+                        driver.get(url)
                         if get_tweet_status(driver, url):
                             if tweet["type"] == "tweet":
                                 result = delete_tweet(driver, url)
