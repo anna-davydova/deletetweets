@@ -29,6 +29,7 @@ def main():
         utils.clean_uc_cache()
         if not utils.os.path.exists("tweets.db"):
             utils.create_tweets_db()
+        start = utils.perf_counter()
         for i in range(count):
             utils.delete_tweets()
             if i > 0:
@@ -37,6 +38,8 @@ def main():
                 else:
                     pause = utils.random.randint(20, 40)
                 utils.sleep(pause * 60)
+            end = utils.perf_counter()
+            utils.logger.info(f"Batch of tweets deleted in {end - start}")
     except KeyboardInterrupt:
         utils.logger.info("Script terminated by user")
         print("\nScript terminated by user")

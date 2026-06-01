@@ -1,13 +1,15 @@
 import sqlite3
 import json
+from pycparser.c_ast import Enum
 import config
+import exceptions
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import TimeoutException
 import undetected_chromedriver as uc
-from time import sleep
+from time import sleep, perf_counter
 import re
 import random
 import os
@@ -15,6 +17,12 @@ import shutil
 import subprocess
 from contextlib import contextmanager
 from logger import logger
+
+
+class Button(Enum):
+    MENU = "menu"
+    DELETE = "delete"
+    CONFIRM = "confirm"
 
 
 def check_command(n: str, mode: str):
@@ -120,10 +128,10 @@ def get_tweet_status(driver: uc.Chrome, url):
 
     if errors:
         logger.warning(f"Tweet {url} NOT FOUND (Skipping)")
-        return 'not found'
+        return False
     else:
         logger.info(f"Tweet {url} IS ALIVE (Can be deleted)")
-        return 'deleted'
+        return True
 
 
 def scroll(driver: uc.Chrome):
@@ -141,6 +149,75 @@ def scroll(driver: uc.Chrome):
     for i in range(random.randint(3, 7)):
         ActionChains(driver).scroll_by_amount(0, random.randint(15, 30)).perform()
         sleep(random.uniform(0.5, 1.5))
+
+
+def get_type_selector(selector: str):
+    if re.fullmatch(r"\[.+]", selector):
+        return By.CSS_SELECTOR
+    else:
+        return By.XPATH
+
+
+def click_button(driver: uc.Chrome, mode: str):
+    button = None
+    selectors = {
+        Button.MENU: [
+            "[data-testid='caret']",
+            "[aria-label='More']"
+        ],
+        Button.DELETE: [
+            "//div[@role='menuitem']//span[text()='Delete']",
+            "[data-testid='delete']"
+        ],
+        Button.CONFIRM: [
+            "[data-testid='confirmationSheetConfirm']",
+            "//button[@data-testid='confirmationSheetConfirm']",
+            "//button//span[text()='Delete']"
+        ]
+    }
+    button_exceptions = {
+        Button.MENU: exceptions.MenuButtonNotFoundError,
+        Button.DELETE: exceptions.DeleteButtonNotFoundError,
+        Button.CONFIRM: exceptions.ConfirmButtonNotFoundError
+    }
+    for selector in selectors[mode]:
+        try:
+            button = WebDriverWait(driver, 10).until(
+                EC.visibility_of_element_located(
+                    (get_type_selector(selector), selector)
+                )
+            )
+            logger.info(f"{mode.title()} button found with selector {selector}")
+            break
+        except Exception:
+            logger.error(f"{mode.title()} button not found with selector: {selector}")
+    if not button:
+        raise button_exceptions[mode](f"{mode.title()} button not found")
+    sleep(random.uniform(1, 2))
+    button.click()
+    logger.info(f"{mode.title()} button clicked")
+    sleep(random.uniform(1, 2))
+
+
+def delete_tweet(driver: uc.Chrome, url: str):
+    try:
+        logger.info(f"Starting deletion for tweet: {url}")
+        click_button(driver, Button.MENU)
+        click_button(driver, Button.DELETE)
+        click_button(driver, Button.CONFIRM)
+        logger.info(f"Tweet {url} deleted")
+        return True
+    except exceptions.ButtonError as err:
+        logger.error(f"Failed to delete tweet: {url}. Error: {err}")
+        return False
+    except Exception:
+        logger.error(f"Failed to delete tweet: {url}", exc_info=True)
+        print(f"Failed to delete tweet: {url}")
+        return False
+
+
+def delete_retweet(driver: uc.Chrome, url: str):
+    pass
 
 
 def delete_tweets() -> None:
@@ -167,7 +244,14 @@ def delete_tweets() -> None:
                     logger.info(f"Start checking tweet: {url}")
                     driver.get(url)
                     try:
-                        status = get_tweet_status(driver, url)
+                        if get_tweet_status(driver, url):
+                            if tweet["type"] == "tweet":
+                                result = delete_tweet(driver, url)
+                                status = 'Deleted' if result else 'Failed'
+                            else:
+                                status = None
+                        else:
+                            status = "Not found"
                         try:
                             with transaction(conn):
                                 cur.execute("""
@@ -178,6 +262,8 @@ def delete_tweets() -> None:
                         except Exception as err:
                             logger.error(f"Failed to save tweet {url} to the database. Error: {err}")
                         sleep(waiting)
+                        if random.random() < 0.15:
+                            scroll(driver)
                     except TimeoutException:
                         logger.error(f"Timeout or unknown page for URL: {url}")
                         sleep(waiting)
