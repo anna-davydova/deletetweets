@@ -12,3 +12,11 @@ class DeleteButtonNotFoundError(ButtonError):
 
 class ConfirmButtonNotFoundError(ButtonError):
     pass
+
+
+class UndoRepostButtonNotFoundError(ButtonError):
+    pass
+
+
+class ConfirmUndoRepostButtonNotFoundError(ButtonError):
+    pass

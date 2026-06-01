@@ -23,6 +23,8 @@ class Button(Enum):
     MENU = "menu"
     DELETE = "delete"
     CONFIRM = "confirm"
+    UNDO_REPOST = "undo_repost"
+    CONFIRM_UNDO_REPOST = "confirm_undo_repost"
 
 
 def check_command(n: str, mode: str):
@@ -162,8 +164,8 @@ def click_button(driver: uc.Chrome, mode: str):
     button = None
     selectors = {
         Button.MENU: [
-            "[data-testid='caret']",
-            "[aria-label='More']"
+            "[aria-label='More']",
+            "[data-testid='caret']"
         ],
         Button.DELETE: [
             "//div[@role='menuitem']//span[text()='Delete']",
@@ -171,15 +173,25 @@ def click_button(driver: uc.Chrome, mode: str):
         ],
         Button.CONFIRM: [
             "[data-testid='confirmationSheetConfirm']",
-            "//button[@data-testid='confirmationSheetConfirm']",
             "//button//span[text()='Delete']"
+        ],
+        Button.UNDO_REPOST: [
+            "[data-testid='unretweet']",
+            "[aria-label*='Reposted']"
+        ],
+        Button.CONFIRM_UNDO_REPOST: [
+            "[data-testid='unretweetConfirm']",
+            "//div[@role='menuitem']//span[text()='Undo repost']"
         ]
     }
     button_exceptions = {
         Button.MENU: exceptions.MenuButtonNotFoundError,
         Button.DELETE: exceptions.DeleteButtonNotFoundError,
-        Button.CONFIRM: exceptions.ConfirmButtonNotFoundError
+        Button.CONFIRM: exceptions.ConfirmButtonNotFoundError,
+        Button.UNDO_REPOST: exceptions.UndoRepostButtonNotFoundError,
+        Button.CONFIRM_UNDO_REPOST: exceptions.ConfirmUndoRepostButtonNotFoundError
     }
+
     for selector in selectors[mode]:
         try:
             button = WebDriverWait(driver, 10).until(
@@ -217,7 +229,19 @@ def delete_tweet(driver: uc.Chrome, url: str):
 
 
 def delete_retweet(driver: uc.Chrome, url: str):
-    pass
+    try:
+        logger.info(f"Starting deletion for retweet: {url}")
+        click_button(driver, Button.UNDO_REPOST)
+        click_button(driver, Button.CONFIRM_UNDO_REPOST)
+        logger.info(f"Retweet {url} deleted")
+        return True
+    except exceptions.ButtonError as err:
+        logger.error(f"Failed to delete retweet: {url}. Error: {err}")
+        return False
+    except Exception:
+        logger.error(f"Failed to delete retweet: {url}", exc_info=True)
+        print(f"Failed to delete retweet: {url}")
+        return False
 
 
 def delete_tweets() -> None:
