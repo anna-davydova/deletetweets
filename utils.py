@@ -27,6 +27,11 @@ class Button(Enum):
     CONFIRM_UNDO_REPOST = "confirm_undo_repost"
 
 
+class TweetType(Enum):
+    TWEET = "tweet"
+    RETWEET = "retweet"
+
+
 def check_command(n: str, mode: str):
     if mode == "Command":
         if n.strip() in ("1", "2"):
@@ -246,13 +251,17 @@ def delete_retweet(driver: uc.Chrome, url: str):
 
 
 def delete_tweets() -> None:
+    tweet_types = {
+        TweetType.TWEET: delete_tweet,
+        TweetType.RETWEET: delete_retweet
+    }
     options = uc.ChromeOptions()
     options.binary_location = str(config.chrome_path)
     options.add_argument(f"--user-data-dir={str(config.profile_path)}")
     chrome_version = get_chrome_version(config.chrome_path) if config.version is None else config.version
     with init_db() as conn:
         cur = conn.cursor()
-        count = random.randint(5, 10)
+        count = random.randint(10, 20)
         cur.execute("""
                         SELECT id, type
                         FROM tweets
@@ -271,11 +280,8 @@ def delete_tweets() -> None:
                     try:
                         driver.get(url)
                         if get_tweet_status(driver, url):
-                            if tweet["type"] == "tweet":
-                                result = delete_tweet(driver, url)
-                                status = 'Deleted' if result else 'Failed'
-                            else:
-                                status = None
+                            result = tweet_types[tweet["type"]](driver, url)
+                            status = 'Deleted' if result else 'Failed'
                         else:
                             status = "Not found"
                         try:
