@@ -100,6 +100,15 @@ def transaction(conn: sqlite3.Connection):
         raise
 
 
+@contextmanager
+def chrome_driver(*args, **kwargs):
+    driver = uc.Chrome(*args, **kwargs)
+    try:
+        yield driver
+    finally:
+        driver.quit()
+
+
 def create_tweets_db():
     with init_db() as conn:
         cur = conn.cursor()
@@ -261,7 +270,7 @@ def delete_tweets() -> None:
     chrome_version = get_chrome_version(config.chrome_path) if config.version is None else config.version
     with init_db() as conn:
         cur = conn.cursor()
-        count = random.randint(10, 20)
+        count = random.randint(20, 25)
         cur.execute("""
                         SELECT id, type
                         FROM tweets
@@ -270,8 +279,10 @@ def delete_tweets() -> None:
                     """, (count,))
         tweets = cur.fetchall()
         if tweets:
-            logger.info(f"Fetched {count} tweets to delete")
-            with uc.Chrome(options=options, version_main=chrome_version) as driver:
+            print(f"Selected tweets to delete: {count}")
+            logger.info(f"Selected tweets to delete: {count}")
+            with chrome_driver(options=options, version_main=chrome_version) as driver:
+            # with uc.Chrome(options=options, version_main=chrome_version) as driver:
                 driver.set_page_load_timeout(30)
                 for tweet in tweets:
                     waiting = random.uniform(5, 10)

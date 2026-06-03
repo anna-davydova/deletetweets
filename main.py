@@ -32,13 +32,16 @@ def main():
         print("Start working...")
         start = utils.perf_counter()
         for i in range(count):
-            utils.delete_tweets()
             if i > 0:
                 if i % 3 == 0:
                     pause = utils.random.randint(180, 240)
                 else:
                     pause = utils.random.randint(20, 40)
-                utils.sleep(pause * 60)
+                print(f"Waiting for {pause} minutes between the butches...")
+                utils.sleep(pause * 60 + utils.random.random())
+            print(f"Start deletion of batch: {i + 1}")
+            utils.delete_tweets()
+            print(f"Batch {i + 1} deleted")
             end = utils.perf_counter()
             utils.logger.info(f"Batch of tweets deleted in {end - start}")
     except KeyboardInterrupt:
@@ -49,7 +52,7 @@ def main():
         print("Connection lost or script terminated by user")
     except Exception as err:
         print(f"Script failed. Error: {err}")
-        utils.logger.error(f"Script failed. Error: {err}")
+        utils.logger.error(f"Script failed. Error: {err}", exc_info=True)
     finally:
         print("Finished!")
         utils.logger.info("SCRIPT EXECUTION FINISHED")
