@@ -1,5 +1,7 @@
 import sqlite3
 import json
+from unittest import result
+
 from pycparser.c_ast import Enum
 import config
 import exceptions
@@ -134,6 +136,57 @@ def create_tweets_db():
         except FileNotFoundError as err:
             print(f"{err.strerror}: {err.filename}")
             print(f"Error: Invalid path or filename. Please check your config.")
+
+
+def get_statistics():
+    with init_db() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+                        SELECT  
+	                        CASE 
+		                        WHEN status IS NULL THEN 'Unchecked'
+		                        ELSE status
+	                        END AS status,
+	                        COUNT(id) AS count_tweets
+                        FROM tweets
+                        GROUP BY status
+                        ORDER BY status;
+        """)
+        result = cur.fetchall()
+        print("TWEET STATISTICS")
+        for line in result:
+            print(f"{line["status"]}: {line["count_tweets"]}")
+
+
+def get_failed_tweets():
+    with init_db() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT COUNT(*) AS count_tweets
+            FROM tweets
+            WHERE status = 'Failed';
+        """)
+        count = cur.fetchone()["count_tweets"]
+        if count > 0:
+            print(f"You have {count} failed tweet{"s" if count > 1 else ""}.")
+            result = input(f"Do you want to clear their status and try deleting them again? Enter [y/n]: ")
+            while True:
+                if result[0].lower() == 'y':
+                    cur.execute("""
+                        UPDATE tweets
+                        SET status = NULL
+                        WHERE status = 'Failed';
+                    """)
+                    if count == 1:
+                        msg = "The failed tweet's status was cleared. It will be retried next time."
+                    else:
+                        msg = "The failed tweets' statuses were cleared. They will be retried next time."
+                    print(msg)
+                    break
+                elif result[0].lower() == 'n':
+                    break
+                else:
+                    result = input("Incorrect input. Please try again, enter [y/n]: ")
 
 
 def get_tweet_status(driver: uc.Chrome, url):
