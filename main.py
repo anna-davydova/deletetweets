@@ -44,6 +44,12 @@ def main():
             print(f"Batch {i + 1} deleted")
             end = utils.perf_counter()
             utils.logger.info(f"Batch of tweets deleted in {end - start}")
+    except utils.exceptions.PossibleCaptchaError:
+        msg = (f"Possible CAPTCHA. Script execution stopped. Please pause deletion, "
+                             f"log into Twitter manually (without the script), try deleting any tweet, "
+                             f"and solve the CAPTCHA if it appears.")
+        utils.logger.warning(msg)
+        print(msg)
     except KeyboardInterrupt:
         utils.logger.info("Script terminated by user")
         print("\nScript terminated by user")

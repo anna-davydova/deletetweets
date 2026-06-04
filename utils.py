@@ -17,6 +17,7 @@ import shutil
 import subprocess
 from contextlib import contextmanager
 from logger import logger
+from collections import deque
 
 
 class Button(Enum):
@@ -226,14 +227,38 @@ def click_button(driver: uc.Chrome, mode: str):
     sleep(random.uniform(1, 2))
 
 
+def find_captcha(driver: uc.Chrome):
+    # 1. Google reCAPTCHA
+    recaptcha_iframes = driver.find_elements(By.XPATH, """
+            //iframe[contains(@src, 'recaptcha') or contains(@src, 'google.com/recaptcha')]
+        """)
+    # 2. hCaptcha
+    hcaptcha_iframes = driver.find_elements(By.XPATH, """
+            //iframe[contains(@src, 'hcaptcha') or contains(@src, 'hcaptcha.com')]
+        """)
+    # 3. Custom Twitter Captcha
+    custom_captcha = driver.find_elements(By.CSS_SELECTOR, """
+            [role="dialog"],
+            [aria-label*="Verify"],
+            [aria-label*="human"],
+            [aria-label*="solve"],
+            [aria-label*="puzzle"]
+        """)
+    return recaptcha_iframes or hcaptcha_iframes or custom_captcha
+
+
 def delete_tweet(driver: uc.Chrome, url: str):
     try:
         logger.info(f"Starting deletion for tweet: {url}")
         click_button(driver, Button.MENU)
         click_button(driver, Button.DELETE)
+        if find_captcha(driver):
+            raise exceptions.PossibleCaptchaError
         click_button(driver, Button.CONFIRM)
         logger.info(f"Tweet {url} deleted")
         return True
+    except exceptions.PossibleCaptchaError:
+        raise
     except exceptions.ButtonError as err:
         logger.error(f"Failed to delete tweet: {url}. Error: {err}")
         return False
@@ -247,9 +272,13 @@ def delete_retweet(driver: uc.Chrome, url: str):
     try:
         logger.info(f"Starting deletion for retweet: {url}")
         click_button(driver, Button.UNDO_REPOST)
+        if find_captcha(driver):
+            raise exceptions.PossibleCaptchaError
         click_button(driver, Button.CONFIRM_UNDO_REPOST)
         logger.info(f"Retweet {url} deleted")
         return True
+    except exceptions.PossibleCaptchaError:
+        raise
     except exceptions.ButtonError as err:
         logger.error(f"Failed to delete retweet: {url}. Error: {err}")
         return False
@@ -260,6 +289,7 @@ def delete_retweet(driver: uc.Chrome, url: str):
 
 
 def delete_tweets() -> None:
+    queue = deque([True] * 5, maxlen=5)
     tweet_types = {
         TweetType.TWEET: delete_tweet,
         TweetType.RETWEET: delete_retweet
@@ -282,7 +312,6 @@ def delete_tweets() -> None:
             print(f"Selected tweets to delete: {count}")
             logger.info(f"Selected tweets to delete: {count}")
             with chrome_driver(options=options, version_main=chrome_version) as driver:
-            # with uc.Chrome(options=options, version_main=chrome_version) as driver:
                 driver.set_page_load_timeout(30)
                 for tweet in tweets:
                     waiting = random.uniform(5, 10)
@@ -292,6 +321,9 @@ def delete_tweets() -> None:
                         driver.get(url)
                         if get_tweet_status(driver, url):
                             result = tweet_types[tweet["type"]](driver, url)
+                            queue.append(result)
+                            if not any(queue):
+                                raise exceptions.PossibleCaptchaError
                             status = 'Deleted' if result else 'Failed'
                         else:
                             status = "Not found"
@@ -307,6 +339,8 @@ def delete_tweets() -> None:
                         sleep(waiting)
                         if random.random() < 0.15:
                             scroll(driver)
+                    except exceptions.PossibleCaptchaError:
+                        raise
                     except TimeoutException:
                         logger.error(f"Timeout or unknown page for URL: {url}")
                         sleep(waiting)

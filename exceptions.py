@@ -20,3 +20,7 @@ class UndoRepostButtonNotFoundError(ButtonError):
 
 class ConfirmUndoRepostButtonNotFoundError(ButtonError):
     pass
+
+
+class PossibleCaptchaError(Exception):
+    pass
