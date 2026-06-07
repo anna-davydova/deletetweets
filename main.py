@@ -52,6 +52,8 @@ def main():
                              f"and solve the CAPTCHA if it appears.")
         utils.logger.warning(msg)
         print(msg)
+        utils.get_failed_tweets()
+        utils.get_statistics()
     except KeyboardInterrupt:
         utils.logger.info("Script terminated by user")
         print("\nScript terminated by user")

@@ -1,8 +1,6 @@
 import sqlite3
 import json
-from unittest import result
-
-from pycparser.c_ast import Enum
+from enum import StrEnum
 import config
 import exceptions
 from selenium.webdriver.common.by import By
@@ -22,7 +20,7 @@ from logger import logger
 from collections import deque
 
 
-class Button(Enum):
+class Button(StrEnum):
     MENU = "menu"
     DELETE = "delete"
     CONFIRM = "confirm"
@@ -30,7 +28,7 @@ class Button(Enum):
     CONFIRM_UNDO_REPOST = "confirm_undo_repost"
 
 
-class TweetType(Enum):
+class TweetType(StrEnum):
     TWEET = "tweet"
     RETWEET = "retweet"
 
@@ -113,80 +111,94 @@ def chrome_driver(*args, **kwargs):
 
 
 def create_tweets_db():
-    with init_db() as conn:
-        cur = conn.cursor()
-        cur.execute("""
-                        CREATE TABLE IF NOT EXISTS tweets (
-                            id TEXT PRIMARY KEY,
-                            type TEXT,
-                            status TEXT DEFAULT NULL
-                        )
-                    """)
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_status ON tweets(status)")
-        try:
-            with open(config.path, encoding="utf-8") as file:
-                data = json.load(file)
-                insert_tweets = []
-                for tweet in data:
-                    insert_tweets.append((tweet["tweet"]["id"], get_tweet_type(tweet["tweet"]["full_text"])))
-                cur.executemany(
-                    "INSERT OR IGNORE INTO tweets (id, type) VALUES (?, ?)",
-                    insert_tweets
-                )
-        except FileNotFoundError as err:
-            print(f"{err.strerror}: {err.filename}")
-            print(f"Error: Invalid path or filename. Please check your config.")
+    try:
+        with init_db() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                            CREATE TABLE IF NOT EXISTS tweets (
+                                id TEXT PRIMARY KEY,
+                                type TEXT,
+                                status TEXT DEFAULT NULL
+                            )
+                        """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_status ON tweets(status)")
+            logger.info("DataBase created")
+            try:
+                with open(config.path, encoding="utf-8") as file:
+                    data = json.load(file)
+                    insert_tweets = []
+                    for tweet in data:
+                        insert_tweets.append((tweet["tweet"]["id"], get_tweet_type(tweet["tweet"]["full_text"])))
+                    cur.executemany(
+                        "INSERT OR IGNORE INTO tweets (id, type) VALUES (?, ?)",
+                        insert_tweets
+                    )
+                logger.info("Tweet information added to database")
+            except FileNotFoundError as err:
+                print(f"{err.strerror}: {err.filename}")
+                print(f"Error: Invalid path or filename. Please check your config.")
+    except Exception as err:
+        print(f"Failed to create database: {err}")
+        logger.error("Failed to create database", exc_info=True)
 
 
 def get_statistics():
-    with init_db() as conn:
-        cur = conn.cursor()
-        cur.execute("""
-                        SELECT  
-	                        CASE 
-		                        WHEN status IS NULL THEN 'Unchecked'
-		                        ELSE status
-	                        END AS status,
-	                        COUNT(id) AS count_tweets
-                        FROM tweets
-                        GROUP BY status
-                        ORDER BY status;
-        """)
-        result = cur.fetchall()
-        print("TWEET STATISTICS")
-        for line in result:
-            print(f"{line["status"]}: {line["count_tweets"]}")
+    try:
+        with init_db() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                            SELECT  
+                                CASE 
+                                    WHEN status IS NULL THEN 'Unchecked'
+                                    ELSE status
+                                END AS status,
+                                COUNT(id) AS count_tweets
+                            FROM tweets
+                            GROUP BY status
+                            ORDER BY status;
+            """)
+            result = cur.fetchall()
+            print("TWEET STATISTICS")
+            for line in result:
+                print(f"{line["status"]}: {line["count_tweets"]}")
+    except Exception as err:
+        print(f"Failed to get tweet statistics: {err}")
+        logger.error("Failed to get tweet statistics", exc_info=True)
 
 
 def get_failed_tweets():
-    with init_db() as conn:
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT COUNT(*) AS count_tweets
-            FROM tweets
-            WHERE status = 'Failed';
-        """)
-        count = cur.fetchone()["count_tweets"]
-        if count > 0:
-            print(f"You have {count} failed tweet{"s" if count > 1 else ""}.")
-            result = input(f"Do you want to clear their status and try deleting them again? Enter [y/n]: ")
-            while True:
-                if result[0].lower() == 'y':
-                    cur.execute("""
-                        UPDATE tweets
-                        SET status = NULL
-                        WHERE status = 'Failed';
-                    """)
-                    if count == 1:
-                        msg = "The failed tweet's status was cleared. It will be retried next time."
+    try:
+        with init_db() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT COUNT(*) AS count_tweets
+                FROM tweets
+                WHERE status = 'Failed';
+            """)
+            count = cur.fetchone()["count_tweets"]
+            if count > 0:
+                print(f"You have {count} failed tweet{"s" if count > 1 else ""}.")
+                result = input(f"Do you want to clear their status and try deleting them again? Enter [y/n]: ")
+                while True:
+                    if result[0].lower() == 'y':
+                        cur.execute("""
+                            UPDATE tweets
+                            SET status = NULL
+                            WHERE status = 'Failed';
+                        """)
+                        if count == 1:
+                            msg = "The failed tweet's status was cleared. It will be retried next time."
+                        else:
+                            msg = "The failed tweets' statuses were cleared. They will be retried next time."
+                        print(msg)
+                        break
+                    elif result[0].lower() == 'n':
+                        break
                     else:
-                        msg = "The failed tweets' statuses were cleared. They will be retried next time."
-                    print(msg)
-                    break
-                elif result[0].lower() == 'n':
-                    break
-                else:
-                    result = input("Incorrect input. Please try again, enter [y/n]: ")
+                        result = input("Incorrect input. Please try again, enter [y/n]: ")
+    except Exception as err:
+        print(f"Failed to get failed tweets: {err}")
+        logger.error("Failed to get failed tweets", exc_info=True)
 
 
 def get_tweet_status(driver: uc.Chrome, url):
@@ -228,7 +240,7 @@ def get_type_selector(selector: str):
         return By.XPATH
 
 
-def click_button(driver: uc.Chrome, mode: str):
+def click_button(driver: uc.Chrome, mode: Button):
     button = None
     selectors = {
         Button.MENU: [
@@ -285,10 +297,14 @@ def find_captcha(driver: uc.Chrome):
     recaptcha_iframes = driver.find_elements(By.XPATH, """
             //iframe[contains(@src, 'recaptcha') or contains(@src, 'google.com/recaptcha')]
         """)
+    if recaptcha_iframes:
+        logger.warning(f"Possible CAPTCHA. recaptcha_iframes = {recaptcha_iframes}")
     # 2. hCaptcha
     hcaptcha_iframes = driver.find_elements(By.XPATH, """
             //iframe[contains(@src, 'hcaptcha') or contains(@src, 'hcaptcha.com')]
         """)
+    if hcaptcha_iframes:
+        logger.warning(f"Possible CAPTCHA. hcaptcha_iframes = {hcaptcha_iframes}")
     # 3. Custom Twitter Captcha
     custom_captcha = driver.find_elements(By.CSS_SELECTOR, """
             [role="dialog"],
@@ -297,6 +313,8 @@ def find_captcha(driver: uc.Chrome):
             [aria-label*="solve"],
             [aria-label*="puzzle"]
         """)
+    if custom_captcha:
+        logger.warning(f"Possible CAPTCHA. custom_captcha = {custom_captcha}")
     return recaptcha_iframes or hcaptcha_iframes or custom_captcha
 
 
@@ -314,6 +332,7 @@ def delete_tweet(driver: uc.Chrome, url: str):
         raise
     except exceptions.ButtonError as err:
         logger.error(f"Failed to delete tweet: {url}. Error: {err}")
+        print(f"Failed to delete tweet: {url}")
         return False
     except Exception:
         logger.error(f"Failed to delete tweet: {url}", exc_info=True)
@@ -334,6 +353,7 @@ def delete_retweet(driver: uc.Chrome, url: str):
         raise
     except exceptions.ButtonError as err:
         logger.error(f"Failed to delete retweet: {url}. Error: {err}")
+        print(f"Failed to delete retweet: {url}")
         return False
     except Exception:
         logger.error(f"Failed to delete retweet: {url}", exc_info=True)
@@ -351,53 +371,61 @@ def delete_tweets() -> None:
     options.binary_location = str(config.chrome_path)
     options.add_argument(f"--user-data-dir={str(config.profile_path)}")
     chrome_version = get_chrome_version(config.chrome_path) if config.version is None else config.version
-    with init_db() as conn:
-        cur = conn.cursor()
-        count = random.randint(20, 25)
-        cur.execute("""
-                        SELECT id, type
-                        FROM tweets
-                        WHERE status IS NULL
-                        LIMIT (?);
-                    """, (count,))
-        tweets = cur.fetchall()
-        if tweets:
-            print(f"Selected tweets to delete: {count}")
-            logger.info(f"Selected tweets to delete: {count}")
-            with chrome_driver(options=options, version_main=chrome_version) as driver:
-                driver.set_page_load_timeout(30)
-                for tweet in tweets:
-                    waiting = random.uniform(5, 10)
-                    url = f"https://x.com/user/status/{tweet["id"]}"
-                    logger.info(f"Start checking tweet: {url}")
-                    try:
-                        driver.get(url)
-                        if get_tweet_status(driver, url):
-                            result = tweet_types[tweet["type"]](driver, url)
-                            queue.append(result)
-                            if not any(queue):
-                                raise exceptions.PossibleCaptchaError
-                            status = 'Deleted' if result else 'Failed'
-                        else:
-                            status = "Not found"
+    try:
+        with init_db() as conn:
+            cur = conn.cursor()
+            count = random.randint(20, 25)
+            cur.execute("""
+                            SELECT id, type
+                            FROM tweets
+                            WHERE status IS NULL
+                            LIMIT (?);
+                        """, (count,))
+            tweets = cur.fetchall()
+            if tweets:
+                print(f"Selected tweets to delete: {count}")
+                logger.info(f"Selected tweets to delete: {count}")
+                with chrome_driver(options=options, version_main=chrome_version) as driver:
+                    driver.set_page_load_timeout(30)
+                    for tweet in tweets:
+                        waiting = random.uniform(5, 10)
+                        url = f"https://x.com/user/status/{tweet["id"]}"
+                        logger.info(f"Start checking tweet: {url}")
                         try:
-                            with transaction(conn):
-                                cur.execute("""
-                                                UPDATE tweets
-                                                SET status = (?)
-                                                WHERE id = (?)
-                                            """, (status, tweet["id"]))
-                        except Exception as err:
-                            logger.error(f"Failed to save tweet {url} to the database. Error: {err}")
-                        sleep(waiting)
-                        if random.random() < 0.15:
-                            scroll(driver)
-                    except exceptions.PossibleCaptchaError:
-                        raise
-                    except TimeoutException:
-                        logger.error(f"Timeout or unknown page for URL: {url}")
-                        sleep(waiting)
-                scroll(driver)
-        else:
-            print("All tweets deleted")
-            logger.info("All tweets deleted")
+                            driver.get(url)
+                            if get_tweet_status(driver, url):
+                                result = tweet_types[tweet["type"]](driver, url)
+                                queue.append(result)
+                                if not any(queue):
+                                    logger.warning(f"Possible CAPTCHA. 5 tweets with errors: {queue}")
+                                    raise exceptions.PossibleCaptchaError
+                                status = 'Deleted' if result else 'Failed'
+                            else:
+                                status = "Not found"
+                            try:
+                                with transaction(conn):
+                                    cur.execute("""
+                                                    UPDATE tweets
+                                                    SET status = (?)
+                                                    WHERE id = (?)
+                                                """, (status, tweet["id"]))
+                            except Exception as err:
+                                logger.error(f"Failed to save tweet {url} to the database. Error: {err}")
+                            sleep(waiting)
+                            if random.random() < 0.15:
+                                scroll(driver)
+                        except exceptions.PossibleCaptchaError:
+                            raise
+                        except TimeoutException:
+                            logger.error(f"Timeout or unknown page for URL: {url}")
+                            sleep(waiting)
+                    scroll(driver)
+            else:
+                print("All tweets deleted")
+                logger.info("All tweets deleted")
+    except sqlite3.Error as err:
+        print(f"Database error. Failed to delete tweets: {err}")
+        logger.error("Database error. Failed to delete tweets", exc_info=True)
+    except Exception as err:
+        print(f"Failed to delete tweets: {err}")
+        logger.error("Failed to delete tweets", exc_info=True)
