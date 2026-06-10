@@ -9,7 +9,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import TimeoutException
 import undetected_chromedriver as uc
-from time import sleep, perf_counter
+from time import sleep
 import re
 import random
 import os
@@ -17,7 +17,7 @@ import shutil
 import subprocess
 from contextlib import contextmanager
 from logger import logger
-from collections import deque
+from collections import deque, Counter
 
 
 class Button(StrEnum):
@@ -41,6 +41,10 @@ def check_command(n: str, mode: str):
         if n.strip().isdigit() and int(n) > 0:
             return True
     return False
+
+
+def print_statistics(data: Counter) -> None:
+    print("\n".join(f"{k}: {v}" for k, v in data.items()))
 
 
 def clean_uc_cache():
@@ -78,7 +82,7 @@ def get_chrome_version(path: config.Path) -> int:
 
 
 def get_tweet_type(full_text: str) -> str:
-    if re.fullmatch(r"RT @.+", full_text):
+    if re.fullmatch(r"RT @.+\s?", full_text):
         return "retweet"
     return "tweet"
 
@@ -142,7 +146,7 @@ def create_tweets_db():
         logger.error("Failed to create database", exc_info=True)
 
 
-def get_statistics():
+def get_total_statistics():
     try:
         with init_db() as conn:
             cur = conn.cursor()
@@ -158,7 +162,7 @@ def get_statistics():
                             ORDER BY status;
             """)
             result = cur.fetchall()
-            print("TWEET STATISTICS")
+            print("TOTAL TWEET STATISTICS")
             for line in result:
                 print(f"{line["status"]}: {line["count_tweets"]}")
     except Exception as err:
@@ -361,7 +365,8 @@ def delete_retweet(driver: uc.Chrome, url: str):
         return False
 
 
-def delete_tweets() -> None:
+def delete_tweets() -> Counter:
+    statistics = Counter()
     queue = deque([True] * 5, maxlen=5)
     tweet_types = {
         TweetType.TWEET: delete_tweet,
@@ -402,6 +407,7 @@ def delete_tweets() -> None:
                                 status = 'Deleted' if result else 'Failed'
                             else:
                                 status = "Not found"
+                            statistics[status] += 1
                             try:
                                 with transaction(conn):
                                     cur.execute("""
@@ -429,3 +435,5 @@ def delete_tweets() -> None:
     except Exception as err:
         print(f"Failed to delete tweets: {err}")
         logger.error("Failed to delete tweets", exc_info=True)
+    finally:
+        return statistics

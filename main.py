@@ -1,4 +1,6 @@
 import utils
+from datetime import datetime, timedelta
+from time import perf_counter
 
 
 def main():
@@ -29,31 +31,45 @@ def main():
         utils.clean_uc_cache()
         if not utils.os.path.exists("tweets.db"):
             utils.create_tweets_db()
+
         print("Start working...")
-        start = utils.perf_counter()
+        print("-" * 30)
+
+        start = perf_counter()
+        statistics = utils.Counter()
         for i in range(count):
             if i > 0:
                 if i % 3 == 0:
                     pause = utils.random.randint(180, 240)
                 else:
                     pause = utils.random.randint(20, 40)
-                print(f"Waiting for {pause} minutes between the butches...")
+                next_time = (datetime.now() + timedelta(minutes=pause)).strftime("%Y.%m.%d %H:%M")
+                print(f"Waiting for {pause} minutes between the butches... Next deletion will starts at {next_time}")
+                print("-" * 30)
                 utils.sleep(pause * 60 + utils.random.random())
-            print(f"Start deletion of batch: {i + 1}")
-            utils.delete_tweets()
+            print(f"{i + 1}. Start tweet batch deletion")
+            result = utils.delete_tweets()
+            statistics += result
             print(f"Batch {i + 1} deleted")
-            end = utils.perf_counter()
+            utils.print_statistics(result)
+            print("-" * 30)
+            end = perf_counter()
             utils.logger.info(f"Batch of tweets deleted in {end - start}")
+        else:
+            if count > 1:
+                print(f"Batch deletion results ({count} batches):")
+                utils.print_statistics(statistics)
+                print("-" * 30)
         utils.get_failed_tweets()
-        utils.get_statistics()
+        utils.get_total_statistics()
     except utils.exceptions.PossibleCaptchaError:
         msg = (f"Possible CAPTCHA. Script execution stopped. Please pause deletion, "
-                             f"log into Twitter manually (without the script), try deleting any tweet, "
-                             f"and solve the CAPTCHA if it appears.")
+               f"log into Twitter manually (without the script), try deleting any tweet, "
+               f"and solve the CAPTCHA if it appears.")
         utils.logger.warning(msg)
         print(msg)
         utils.get_failed_tweets()
-        utils.get_statistics()
+        utils.get_total_statistics()
     except KeyboardInterrupt:
         utils.logger.info("Script terminated by user")
         print("\nScript terminated by user")
