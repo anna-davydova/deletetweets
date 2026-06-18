@@ -365,8 +365,7 @@ def delete_retweet(driver: uc.Chrome, url: str):
         return False
 
 
-def delete_tweets() -> Counter:
-    statistics = Counter()
+def delete_tweets(statistics: Counter) -> None:
     queue = deque([True] * 5, maxlen=5)
     tweet_types = {
         TweetType.TWEET: delete_tweet,
@@ -420,20 +419,22 @@ def delete_tweets() -> Counter:
                             sleep(waiting)
                             if random.random() < 0.15:
                                 scroll(driver)
+                        except KeyboardInterrupt:
+                            raise
                         except exceptions.PossibleCaptchaError:
                             raise
                         except TimeoutException:
-                            logger.error(f"Timeout or unknown page for URL: {url}")
+                            logger.error(f"Timeout or unknown page for URL: {url}", exc_info=True)
                             sleep(waiting)
                     scroll(driver)
             else:
                 print("All tweets deleted")
                 logger.info("All tweets deleted")
+    except KeyboardInterrupt:
+        raise
     except sqlite3.Error as err:
         print(f"Database error. Failed to delete tweets: {err}")
         logger.error("Database error. Failed to delete tweets", exc_info=True)
     except Exception as err:
         print(f"Failed to delete tweets: {err}")
         logger.error("Failed to delete tweets", exc_info=True)
-    finally:
-        return statistics

@@ -4,6 +4,7 @@ from time import perf_counter
 
 
 def main():
+    keyboard_interrupt_flag = True
     try:
         utils.logger.info("SCRIPT EXECUTION STARTED")
         print(f"Welcome to the DeleteTweets script!\n"
@@ -48,10 +49,9 @@ def main():
                 print("-" * 30)
                 utils.sleep(pause * 60 + utils.random.random())
             print(f"{i + 1}. Start tweet batch deletion")
-            result = utils.delete_tweets()
-            statistics += result
+            utils.delete_tweets(statistics)
             print(f"Batch {i + 1} deleted")
-            utils.print_statistics(result)
+            utils.print_statistics(statistics)
             print("-" * 30)
             end = perf_counter()
             utils.logger.info(f"Batch of tweets deleted in {end - start}")
@@ -60,19 +60,16 @@ def main():
                 print(f"Batch deletion results ({count} batches):")
                 utils.print_statistics(statistics)
                 print("-" * 30)
-        utils.get_failed_tweets()
-        utils.get_total_statistics()
     except utils.exceptions.PossibleCaptchaError:
         msg = (f"Possible CAPTCHA. Script execution stopped. Please pause deletion, "
                f"log into Twitter manually (without the script), try deleting any tweet, "
                f"and solve the CAPTCHA if it appears.")
         utils.logger.warning(msg)
         print(msg)
-        utils.get_failed_tweets()
-        utils.get_total_statistics()
     except KeyboardInterrupt:
+        keyboard_interrupt_flag = False
         utils.logger.info("Script terminated by user")
-        print("\nScript terminated by user")
+        print("Script terminated by user")
     except ConnectionResetError:
         utils.logger.error("Connection lost or script terminated by user")
         print("Connection lost or script terminated by user")
@@ -80,9 +77,17 @@ def main():
         print(f"Script failed. Error: {err}")
         utils.logger.error(f"Script failed. Error: {err}", exc_info=True)
     finally:
-        print("Finished!")
-        utils.logger.info("SCRIPT EXECUTION FINISHED")
-        utils.logger.info("-" * 30)
+        try:
+            if keyboard_interrupt_flag:
+                utils.get_failed_tweets()
+                utils.get_total_statistics()
+        except Exception as err:
+            utils.logger.error(f"Failed to get tweet statistics. Error: {err}", exc_info=True)
+            print(f"Failed to get tweet statistics. Error: {err}")
+        finally:
+            print("Finished!")
+            utils.logger.info("SCRIPT EXECUTION FINISHED")
+            utils.logger.info("-" * 30)
 
 
 if __name__ == '__main__':
