@@ -244,6 +244,18 @@ def get_type_selector(selector: str):
         return By.XPATH
 
 
+def write_to_db(conn, cur, status, tweet_id, url):
+    try:
+        with transaction(conn):
+            cur.execute("""
+                            UPDATE tweets
+                            SET status = (?)
+                            WHERE id = (?)
+                        """, (status, tweet_id))
+    except Exception as err:
+        logger.error(f"Failed to save tweet {url} to the database. Error: {err}")
+
+
 def click_button(driver: uc.Chrome, mode: Button):
     button = None
     selectors = {
@@ -407,15 +419,7 @@ def delete_tweets(statistics: Counter) -> None:
                             else:
                                 status = "Not found"
                             statistics[status] += 1
-                            try:
-                                with transaction(conn):
-                                    cur.execute("""
-                                                    UPDATE tweets
-                                                    SET status = (?)
-                                                    WHERE id = (?)
-                                                """, (status, tweet["id"]))
-                            except Exception as err:
-                                logger.error(f"Failed to save tweet {url} to the database. Error: {err}")
+                            write_to_db(conn, cur, status, tweet["id"], url)
                             sleep(waiting)
                             if random.random() < 0.15:
                                 scroll(driver)
@@ -425,6 +429,7 @@ def delete_tweets(statistics: Counter) -> None:
                             raise
                         except TimeoutException:
                             logger.error(f"Timeout or unknown page for URL: {url}", exc_info=True)
+                            write_to_db(conn, cur, status, tweet["id"], url)
                             sleep(waiting)
                     scroll(driver)
             else:
