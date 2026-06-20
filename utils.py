@@ -146,6 +146,10 @@ def create_tweets_db():
         logger.error("Failed to create database", exc_info=True)
 
 
+def get_tweet_link(tweet_id: str) -> str:
+    return f"https://x.com/user/status/{tweet_id}"
+
+
 def get_total_statistics():
     try:
         with init_db() as conn:
@@ -174,35 +178,47 @@ def get_failed_tweets():
     try:
         with init_db() as conn:
             cur = conn.cursor()
-            cur.execute("""
-                SELECT COUNT(*) AS count_tweets
-                FROM tweets
-                WHERE status = 'Failed';
-            """)
-            count = cur.fetchone()["count_tweets"]
+            try:
+                cur.execute("""
+                    SELECT COUNT(*) AS count_tweets
+                    FROM tweets
+                    WHERE status = 'Failed';
+                """)
+                count = cur.fetchone()["count_tweets"]
+                cur.execute("""
+                    SELECT id
+                    FROM tweets
+                    WHERE status = 'Failed';
+                """)
+                tweet_ids = cur.fetchall()
+            except sqlite3.Error as err:
+                logger.error("Failed to get failed tweets", exc_info=True)
+                print(f"Failed to get failed tweets: {err}")
+                return
             if count > 0:
-                print(f"You have {count} failed tweet{"s" if count > 1 else ""}.")
-                result = input(f"Do you want to clear their status and try deleting them again? Enter [y/n]: ")
-                while True:
-                    if result[0].lower() == 'y':
-                        cur.execute("""
-                            UPDATE tweets
-                            SET status = NULL
-                            WHERE status = 'Failed';
-                        """)
-                        if count == 1:
-                            msg = "The failed tweet's status was cleared. It will be retried next time."
-                        else:
-                            msg = "The failed tweets' statuses were cleared. They will be retried next time."
-                        print(msg)
-                        break
-                    elif result[0].lower() == 'n':
-                        break
-                    else:
-                        result = input("Incorrect input. Please try again, enter [y/n]: ")
+                print(f"You have {count} failed tweet{"s" if count > 1 else ""}:")
+                for tweet_id in tweet_ids:
+                    print(get_tweet_link(tweet_id["id"]))
+                try:
+                    cur.execute("""
+                        UPDATE tweets
+                        SET status = NULL
+                        WHERE status = 'Failed';
+                    """)
+                except sqlite3.Error as err:
+                    logger.error(f"Failed to clear tweets' statuses", exc_info=True)
+                    print(f"Failed to clear tweets' statuses: {err}")
+                    return
+                if count == 1:
+                    msg = (f"The failed tweet's status was cleared. It will be retried next time.\n"
+                    f"Or you can delete it manually. After that, on the next check, it will be marked as 'Not found'.")
+                else:
+                    msg = (f"The failed tweets' statuses were cleared. They will be retried next time.\n"
+                    f"Or you can delete them manually. After that, on the next check, they will be marked as 'Not found'.")
+                print(msg)
     except Exception as err:
-        print(f"Failed to get failed tweets: {err}")
-        logger.error("Failed to get failed tweets", exc_info=True)
+        print(f"An error occurred while fetching the statuses of failed tweets: {err}")
+        logger.error("An error occurred while fetching the statuses of failed tweets", exc_info=True)
 
 
 def get_tweet_status(driver: uc.Chrome, url):
@@ -405,7 +421,7 @@ def delete_tweets(statistics: Counter) -> None:
                     driver.set_page_load_timeout(30)
                     for tweet in tweets:
                         waiting = random.uniform(5, 10)
-                        url = f"https://x.com/user/status/{tweet["id"]}"
+                        url = get_tweet_link(tweet["id"])
                         logger.info(f"Start checking tweet: {url}")
                         try:
                             driver.get(url)
@@ -435,6 +451,8 @@ def delete_tweets(statistics: Counter) -> None:
             else:
                 print("All tweets deleted")
                 logger.info("All tweets deleted")
+    except exceptions.PossibleCaptchaError:
+        raise
     except KeyboardInterrupt:
         raise
     except sqlite3.Error as err:

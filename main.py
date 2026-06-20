@@ -41,7 +41,7 @@ def main():
         for i in range(count):
             if i > 0:
                 if i % 3 == 0:
-                    pause = utils.random.randint(180, 240)
+                    pause = utils.random.randint(120, 240)
                 else:
                     pause = utils.random.randint(20, 40)
                 next_time = (datetime.now() + timedelta(minutes=pause)).strftime("%Y.%m.%d %H:%M")
