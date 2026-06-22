@@ -276,8 +276,8 @@ def click_button(driver: uc.Chrome, mode: Button):
     button = None
     selectors = {
         Button.MENU: [
-            "[aria-label='More']",
-            "[data-testid='caret']"
+            "[data-testid='caret']",
+            "[aria-label='More']"
         ],
         Button.DELETE: [
             "//div[@role='menuitem']//span[text()='Delete']",
