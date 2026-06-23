@@ -211,10 +211,10 @@ def get_failed_tweets():
                     return
                 if count == 1:
                     msg = (f"The failed tweet's status was cleared. It will be retried next time.\n"
-                    f"Or you can delete it manually. After that, on the next check, it will be marked as 'Not found'.")
+                           f"Or you can delete it manually. After that, on the next check, it will be marked as 'Not found'.")
                 else:
                     msg = (f"The failed tweets' statuses were cleared. They will be retried next time.\n"
-                    f"Or you can delete them manually. After that, on the next check, they will be marked as 'Not found'.")
+                           f"Or you can delete them manually. After that, on the next check, they will be marked as 'Not found'.")
                 print(msg)
     except Exception as err:
         print(f"An error occurred while fetching the statuses of failed tweets: {err}")
@@ -272,8 +272,13 @@ def write_to_db(conn, cur, status, tweet_id, url):
         logger.error(f"Failed to save tweet {url} to the database. Error: {err}")
 
 
-def click_button(driver: uc.Chrome, mode: Button):
-    button = None
+def find_tweet_links(driver: uc.Chrome):
+    links = driver.find_elements(By.CSS_SELECTOR, 'a[href*="/status/"]')
+    return links
+
+
+def click_button(driver: uc.Chrome, mode: Button, url=None):
+    buttons = []
     selectors = {
         Button.MENU: [
             "[data-testid='caret']",
@@ -307,8 +312,8 @@ def click_button(driver: uc.Chrome, mode: Button):
 
     for selector in selectors[mode]:
         try:
-            button = WebDriverWait(driver, 10).until(
-                EC.visibility_of_element_located(
+            buttons = WebDriverWait(driver, 10).until(
+                EC.visibility_of_all_elements_located(
                     (get_type_selector(selector), selector)
                 )
             )
@@ -316,8 +321,25 @@ def click_button(driver: uc.Chrome, mode: Button):
             break
         except Exception:
             logger.error(f"{mode.title()} button not found with selector: {selector}")
-    if not button:
+    if not buttons:
         raise button_exceptions[mode](f"{mode.title()} button not found")
+    if mode == Button.MENU and len(buttons) > 1:
+        tweet_ids = []
+        links = find_tweet_links(driver)
+        for link in links:
+            tweet_link = link.get_attribute('href')
+            if isinstance(tweet_link, str):
+                tweet_id = re.search(r"\d+", tweet_link)
+                if tweet_id and tweet_id.group() not in tweet_ids:
+                    tweet_ids.append(tweet_id.group())
+        original_tweet_id = re.search(r"\d+", url).group()
+        if original_tweet_id in tweet_ids and len(tweet_ids) == len(buttons):
+            ind = tweet_ids.index(original_tweet_id)
+            button = buttons[ind]
+        else:
+            raise button_exceptions[mode](f"{mode.title()} button not found")
+    else:
+        button = buttons[0]
     sleep(random.uniform(1, 2))
     button.click()
     logger.info(f"{mode.title()} button clicked")
@@ -353,7 +375,7 @@ def find_captcha(driver: uc.Chrome):
 def delete_tweet(driver: uc.Chrome, url: str):
     try:
         logger.info(f"Starting deletion for tweet: {url}")
-        click_button(driver, Button.MENU)
+        click_button(driver, Button.MENU, url)
         click_button(driver, Button.DELETE)
         if find_captcha(driver):
             raise exceptions.PossibleCaptchaError
