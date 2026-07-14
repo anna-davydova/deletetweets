@@ -7,6 +7,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.remote.webelement import WebElement
 from selenium.common.exceptions import TimeoutException
 import undetected_chromedriver as uc
 from time import sleep
@@ -272,35 +273,33 @@ def write_to_db(conn, cur, status, tweet_id, url):
         logger.error(f"Failed to save tweet {url} to the database. Error: {err}")
 
 
-def find_tweet_links(driver: uc.Chrome):
-    links = driver.find_elements(By.CSS_SELECTOR, 'a[href*="/status/"]')
-    return links
+def find_tweet(driver: uc.Chrome, url: str):
+    logger.info(f"Start to find tweet: {url}")
+    tweets = WebDriverWait(driver, 10).until(
+        EC.presence_of_all_elements_located((By.CSS_SELECTOR, '[data-testid="tweet"]'))
+    )
+
+    if not tweets:
+        logger.error(f"No tweets were found")
+        return None
+
+    logger.info(f"{len(tweets)} tweet{"s were" if len(tweets) > 1 else " was"} found")
+    tweet_id = url.split('/')[-1]
+    for tweet in tweets:
+        if str(tweet_id) in tweet.get_attribute("outerHTML"):
+            logger.info(f"Tweet with id {tweet_id} was found.")
+            return tweet
+    logger.info(f"No tweets with id {tweet_id} were found")
+    return None
 
 
-def click_button(driver: uc.Chrome, mode: Button, url=None):
-    buttons = []
+def click_button(driver: WebElement | uc.Chrome, mode: Button, url=None):
     selectors = {
-        Button.MENU: [
-            "[data-testid='caret']",
-            "[aria-label='More']"
-        ],
-        Button.DELETE: [
-            "//div[@role='menuitem']//span[text()='Delete']",
-            "//span[text()='Delete']",
-            "[data-testid='delete']"
-        ],
-        Button.CONFIRM: [
-            "[data-testid='confirmationSheetConfirm']",
-            "//button//span[text()='Delete']"
-        ],
-        Button.UNDO_REPOST: [
-            "[data-testid='unretweet']",
-            "[aria-label*='Reposted']"
-        ],
-        Button.CONFIRM_UNDO_REPOST: [
-            "[data-testid='unretweetConfirm']",
-            "//div[@role='menuitem']//span[text()='Undo repost']"
-        ]
+        Button.MENU: "[data-testid='caret']",
+        Button.DELETE: "//div[@role='menuitem']//span[text()='Delete']",
+        Button.CONFIRM: "[data-testid='confirmationSheetConfirm']",
+        Button.UNDO_REPOST: "[data-testid='unretweet']",
+        Button.CONFIRM_UNDO_REPOST: "[data-testid='unretweetConfirm']"
     }
     button_exceptions = {
         Button.MENU: exceptions.MenuButtonNotFoundError,
@@ -309,40 +308,19 @@ def click_button(driver: uc.Chrome, mode: Button, url=None):
         Button.UNDO_REPOST: exceptions.UndoRepostButtonNotFoundError,
         Button.CONFIRM_UNDO_REPOST: exceptions.ConfirmUndoRepostButtonNotFoundError
     }
-
-    for selector in selectors[mode]:
-        try:
-            buttons = WebDriverWait(driver, 10).until(
-                EC.visibility_of_all_elements_located(
-                    (get_type_selector(selector), selector)
-                )
+    selector = selectors[mode]
+    try:
+        button = WebDriverWait(driver, 10).until(
+            EC.visibility_of_element_located(
+                (get_type_selector(selector), selector)
             )
-            logger.info(f"{mode.title()} button found with selector {selector}")
-            break
-        except Exception:
-            logger.error(f"{mode.title()} button not found with selector: {selector}")
-    if not buttons:
+        )
+    except Exception:
+        logger.error(f"{mode.title()} button not found with selector: {selector}")
         raise button_exceptions[mode](f"{mode.title()} button not found")
-    if mode == Button.MENU and len(buttons) > 1:
-        tweet_ids = []
-        links = find_tweet_links(driver)
-        for link in links:
-            tweet_link = link.get_attribute('href')
-            if isinstance(tweet_link, str):
-                tweet_id = re.search(r"\d+", tweet_link)
-                if tweet_id and tweet_id.group() not in tweet_ids:
-                    tweet_ids.append(tweet_id.group())
-        original_tweet_id = re.search(r"\d+", url).group()
-        if original_tweet_id in tweet_ids and len(tweet_ids) == len(buttons):
-            ind = tweet_ids.index(original_tweet_id)
-            button = buttons[ind]
-        else:
-            raise button_exceptions[mode](f"{mode.title()} button not found")
-    else:
-        button = buttons[0]
     sleep(random.uniform(1, 2))
     button.click()
-    logger.info(f"{mode.title()} button clicked")
+    logger.info(f"{mode.title()} button clicked successfully")
     sleep(random.uniform(1, 2))
 
 
@@ -375,7 +353,11 @@ def find_captcha(driver: uc.Chrome):
 def delete_tweet(driver: uc.Chrome, url: str):
     try:
         logger.info(f"Starting deletion for tweet: {url}")
-        click_button(driver, Button.MENU, url)
+
+        tweet = find_tweet(driver, url)
+        if tweet is None:
+            return False
+        click_button(tweet, Button.MENU, url)
         click_button(driver, Button.DELETE)
         if find_captcha(driver):
             raise exceptions.PossibleCaptchaError
