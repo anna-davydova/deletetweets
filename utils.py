@@ -34,6 +34,12 @@ class TweetType(StrEnum):
     RETWEET = "retweet"
 
 
+class Tweet:
+    def __init__(self, id):
+        self.id = id
+        self.url = f"https://x.com/user/status/{id}"
+
+
 def check_command(n: str, mode: str):
     if mode == "Command":
         if n.strip() in ("1", "2"):
@@ -273,8 +279,8 @@ def write_to_db(conn, cur, status, tweet_id, url):
         logger.error(f"Failed to save tweet {url} to the database. Error: {err}")
 
 
-def find_tweet(driver: uc.Chrome, url: str):
-    logger.info(f"Start to find tweet: {url}")
+def find_tweet(driver: uc.Chrome, current_tweet: Tweet):
+    logger.info(f"Start to find tweet: {current_tweet.url}")
     tweets = WebDriverWait(driver, 10).until(
         EC.presence_of_all_elements_located((By.CSS_SELECTOR, '[data-testid="tweet"]'))
     )
@@ -284,16 +290,15 @@ def find_tweet(driver: uc.Chrome, url: str):
         return None
 
     logger.info(f"{len(tweets)} tweet{"s were" if len(tweets) > 1 else " was"} found")
-    tweet_id = url.split('/')[-1]
     for tweet in tweets:
-        if str(tweet_id) in tweet.get_attribute("outerHTML"):
-            logger.info(f"Tweet with id {tweet_id} was found.")
+        if current_tweet.id in tweet.get_attribute("outerHTML"):
+            logger.info(f"Tweet with id {current_tweet.id} was found.")
             return tweet
-    logger.info(f"No tweets with id {tweet_id} were found")
+    logger.info(f"No tweets with id {current_tweet.id} were found")
     return None
 
 
-def click_button(driver: WebElement | uc.Chrome, mode: Button, url=None):
+def click_button(driver: WebElement | uc.Chrome, mode: Button):
     selectors = {
         Button.MENU: "[data-testid='caret']",
         Button.DELETE: "//div[@role='menuitem']//span[text()='Delete']",
@@ -350,50 +355,50 @@ def find_captcha(driver: uc.Chrome):
     return recaptcha_iframes or hcaptcha_iframes or custom_captcha
 
 
-def delete_tweet(driver: uc.Chrome, url: str):
+def delete_tweet(driver: uc.Chrome, current_tweet: Tweet):
     try:
-        logger.info(f"Starting deletion for tweet: {url}")
+        logger.info(f"Starting deletion for tweet: {current_tweet.url}")
 
-        tweet = find_tweet(driver, url)
+        tweet = find_tweet(driver, current_tweet)
         if tweet is None:
             return False
-        click_button(tweet, Button.MENU, url)
+        click_button(tweet, Button.MENU)
         click_button(driver, Button.DELETE)
         if find_captcha(driver):
             raise exceptions.PossibleCaptchaError
         click_button(driver, Button.CONFIRM)
-        logger.info(f"Tweet {url} deleted")
+        logger.info(f"Tweet {current_tweet.url} deleted")
         return True
     except exceptions.PossibleCaptchaError:
         raise
     except exceptions.ButtonError as err:
-        logger.error(f"Failed to delete tweet: {url}. Error: {err}")
-        print(f"Failed to delete tweet: {url}")
+        logger.error(f"Failed to delete tweet: {current_tweet.url}. Error: {err}")
+        print(f"Failed to delete tweet: {current_tweet.url}")
         return False
     except Exception:
-        logger.error(f"Failed to delete tweet: {url}", exc_info=True)
-        print(f"Failed to delete tweet: {url}")
+        logger.error(f"Failed to delete tweet: {current_tweet.url}", exc_info=True)
+        print(f"Failed to delete tweet: {current_tweet.url}")
         return False
 
 
-def delete_retweet(driver: uc.Chrome, url: str):
+def delete_retweet(driver: uc.Chrome, current_tweet: Tweet):
     try:
-        logger.info(f"Starting deletion for retweet: {url}")
+        logger.info(f"Starting deletion for retweet: {current_tweet.url}")
         click_button(driver, Button.UNDO_REPOST)
         if find_captcha(driver):
             raise exceptions.PossibleCaptchaError
         click_button(driver, Button.CONFIRM_UNDO_REPOST)
-        logger.info(f"Retweet {url} deleted")
+        logger.info(f"Retweet {current_tweet.url} deleted")
         return True
     except exceptions.PossibleCaptchaError:
         raise
     except exceptions.ButtonError as err:
-        logger.error(f"Failed to delete retweet: {url}. Error: {err}")
-        print(f"Failed to delete retweet: {url}")
+        logger.error(f"Failed to delete retweet: {current_tweet.url}. Error: {err}")
+        print(f"Failed to delete retweet: {current_tweet.url}")
         return False
     except Exception:
-        logger.error(f"Failed to delete retweet: {url}", exc_info=True)
-        print(f"Failed to delete retweet: {url}")
+        logger.error(f"Failed to delete retweet: {current_tweet.url}", exc_info=True)
+        print(f"Failed to delete retweet: {current_tweet.url}")
         return False
 
 
@@ -425,12 +430,12 @@ def delete_tweets(statistics: Counter) -> None:
                     driver.set_page_load_timeout(30)
                     for tweet in tweets:
                         waiting = random.uniform(5, 10)
-                        url = get_tweet_link(tweet["id"])
-                        logger.info(f"Start checking tweet: {url}")
+                        current_tweet = Tweet(tweet["id"])
+                        logger.info(f"Start checking tweet: {current_tweet.url}")
                         try:
-                            driver.get(url)
-                            if get_tweet_status(driver, url):
-                                result = tweet_types[tweet["type"]](driver, url)
+                            driver.get(current_tweet.url)
+                            if get_tweet_status(driver, current_tweet.url):
+                                result = tweet_types[tweet["type"]](driver, current_tweet)
                                 queue.append(result)
                                 if not any(queue):
                                     logger.warning(f"Possible CAPTCHA. 5 tweets with errors: {queue}")
@@ -439,7 +444,7 @@ def delete_tweets(statistics: Counter) -> None:
                             else:
                                 status = "Not found"
                             statistics[status] += 1
-                            write_to_db(conn, cur, status, tweet["id"], url)
+                            write_to_db(conn, cur, status, tweet["id"], current_tweet.url)
                             sleep(waiting)
                             if random.random() < 0.15:
                                 scroll(driver)
@@ -448,8 +453,8 @@ def delete_tweets(statistics: Counter) -> None:
                         except exceptions.PossibleCaptchaError:
                             raise
                         except TimeoutException:
-                            logger.error(f"Timeout or unknown page for URL: {url}", exc_info=True)
-                            write_to_db(conn, cur, status, tweet["id"], url)
+                            logger.error(f"Timeout or unknown page for URL: {current_tweet.url}", exc_info=True)
+                            write_to_db(conn, cur, status, tweet["id"], current_tweet.url)
                             sleep(waiting)
                     scroll(driver)
             else:
