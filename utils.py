@@ -429,6 +429,9 @@ def delete_tweets(statistics: Counter) -> None:
                 with chrome_driver(options=options, version_main=chrome_version) as driver:
                     driver.set_page_load_timeout(30)
                     for tweet in tweets:
+                        if not any(queue):
+                            logger.warning(f"Possible CAPTCHA. 5 tweets with errors or timeout: {queue}")
+                            raise exceptions.PossibleCaptchaError
                         waiting = random.uniform(5, 10)
                         current_tweet = Tweet(tweet["id"])
                         logger.info(f"Start checking tweet: {current_tweet.url}")
@@ -437,9 +440,6 @@ def delete_tweets(statistics: Counter) -> None:
                             if get_tweet_status(driver, current_tweet.url):
                                 result = tweet_types[tweet["type"]](driver, current_tweet)
                                 queue.append(result)
-                                if not any(queue):
-                                    logger.warning(f"Possible CAPTCHA. 5 tweets with errors: {queue}")
-                                    raise exceptions.PossibleCaptchaError
                                 status = 'Deleted' if result else 'Failed'
                             else:
                                 status = "Not found"
@@ -453,7 +453,9 @@ def delete_tweets(statistics: Counter) -> None:
                         except exceptions.PossibleCaptchaError:
                             raise
                         except TimeoutException:
+                            queue.append(False)
                             logger.error(f"Timeout or unknown page for URL: {current_tweet.url}", exc_info=True)
+                            print(f"Timeout or unknown page for URL: {current_tweet.url}")
                             write_to_db(conn, cur, status, tweet["id"], current_tweet.url)
                             sleep(waiting)
                     scroll(driver)
