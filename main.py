@@ -52,7 +52,6 @@ def main():
             utils.delete_tweets(statistics)
             print(f"Batch {i + 1} deleted")
             utils.print_statistics(statistics)
-            print("-" * 30)
             end = perf_counter()
             utils.logger.info(f"Batch of tweets deleted in {end - start}")
         else:
@@ -60,6 +59,9 @@ def main():
                 print(f"Batch deletion results ({count} batches):")
                 utils.print_statistics(statistics)
                 print("-" * 30)
+    except utils.exceptions.AllTweetsDeletedException as err:
+        print(err)
+        utils.logger.info(err)
     except utils.exceptions.PossibleCaptchaError:
         msg = (f"Possible CAPTCHA. Script execution stopped. Please pause deletion, "
                f"log into Twitter manually (without the script), try deleting any tweet, "

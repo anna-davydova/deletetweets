@@ -24,3 +24,7 @@ class ConfirmUndoRepostButtonNotFoundError(ButtonError):
 
 class PossibleCaptchaError(Exception):
     pass
+
+
+class AllTweetsDeletedException(Exception):
+    pass

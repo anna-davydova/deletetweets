@@ -96,8 +96,6 @@ def get_tweet_type(full_text: str) -> str:
 
 def init_db(db_name="tweets.db"):
     conn = sqlite3.connect(db_name)
-    conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA synchronous = NORMAL;")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -173,6 +171,7 @@ def get_total_statistics():
                             ORDER BY status;
             """)
             result = cur.fetchall()
+            print("-" * 30)
             print("TOTAL TWEET STATISTICS")
             for line in result:
                 print(f"{line["status"]}: {line["count_tweets"]}")
@@ -465,8 +464,11 @@ def delete_tweets(statistics: Counter) -> None:
                             sleep(waiting)
                     scroll(driver)
             else:
-                print("All tweets deleted")
-                logger.info("All tweets deleted")
+                # print("All tweets deleted")
+                # logger.info("All tweets deleted")
+                raise exceptions.AllTweetsDeletedException("All tweets deleted")
+    except exceptions.AllTweetsDeletedException:
+        raise
     except exceptions.PossibleCaptchaError:
         raise
     except KeyboardInterrupt:
