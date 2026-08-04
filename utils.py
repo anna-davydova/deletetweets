@@ -440,9 +440,14 @@ def delete_tweets(statistics: Counter) -> None:
                             if get_tweet_status(driver, current_tweet.url):
                                 result = tweet_types[tweet["type"]](driver, current_tweet)
                                 queue.append(result)
-                                status = 'Deleted' if result else 'Failed'
+                                status = "Deleted" if result else "Failed"
                             else:
-                                status = "Not found"
+                                try:
+                                    with open("not_found_tweets.txt", mode="a", encoding="utf-8") as file:
+                                        print(current_tweet.url, file=file)
+                                    status = "Not found"
+                                except Exception as err:
+                                    logger.warning(f"Failed to write 'not found' tweet link: {err}", exc_info=True)
                             statistics[status] += 1
                             write_to_db(conn, cur, status, tweet["id"], current_tweet.url)
                             sleep(waiting)

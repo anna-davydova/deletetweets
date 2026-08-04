@@ -3,3 +3,4 @@
 tweets.db*
 *.log
 __pycache__/
+not_found_tweets.txt
