@@ -473,8 +473,6 @@ def delete_tweets(statistics: Counter) -> None:
                             sleep(waiting)
                     scroll(driver)
             else:
-                # print("All tweets deleted")
-                # logger.info("All tweets deleted")
                 raise exceptions.AllTweetsDeletedException("All tweets deleted")
     except exceptions.AllTweetsDeletedException:
         raise

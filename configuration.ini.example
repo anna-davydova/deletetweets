@@ -1,0 +1,17 @@
+[data]
+# Path to json file with your tweets
+json_path = C:\Users\user_name\Desktop\tweets.json
+# Path to chrome.exe
+chrome_exe_path = D:\PortableApps\GoogleChromePortableNew\App\Chrome-bin\chrome.exe
+# Path to chrome profile
+chrome_user_profile_path = D:\PortableApps\GoogleChromePortableNew\Data\profile
+# Leave version as None for automatic version detection
+# If you have errors with browser version, write your browser version here
+# Choose "About Chrome" in the browser. For example, if your version is 151.0.7922.72, use only the first number: 151
+version = None
+
+[tweet_parameters]
+# Leave both parameters as None if you want to delete all your tweets.
+# If you want to delete tweets for a specific time period, set both parameters to ISO format dates (YYYY-MM-DD)
+start_date = None
+end_date = None
