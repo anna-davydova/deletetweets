@@ -20,7 +20,7 @@ try:
     chrome_path = Path(config['data']['chrome_exe_path'])
     profile_path = Path(config['data']['chrome_user_profile_path'])
     version = int(config['data']['version']) if config['data']['version'].isdigit() else None
-    match (config['tweet_parameters']['start_date'], config['tweet_parameters']['end_date']):
+    match (config['tweet_parameters']['start_date'].title(), config['tweet_parameters']['end_date'].title()):
         case ('None', 'None'):
             start_date = None
             end_date = None

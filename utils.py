@@ -19,6 +19,7 @@ import subprocess
 from contextlib import contextmanager
 from logger import logger
 from collections import deque, Counter
+from datetime import datetime, date
 
 
 class Button(StrEnum):
@@ -119,6 +120,10 @@ def chrome_driver(*args, **kwargs):
         driver.quit()
 
 
+def check_tweet_date(tweet_date: date) -> bool:
+    return config.start_date <= tweet_date <= config.end_date
+
+
 def create_tweets_db():
     try:
         with init_db() as conn:
@@ -127,7 +132,8 @@ def create_tweets_db():
                             CREATE TABLE IF NOT EXISTS tweets (
                                 id TEXT PRIMARY KEY,
                                 type TEXT,
-                                status TEXT DEFAULT NULL
+                                status TEXT DEFAULT NULL,
+                                created_at TEXT
                             )
                         """)
             cur.execute("CREATE INDEX IF NOT EXISTS idx_status ON tweets(status)")
@@ -137,9 +143,12 @@ def create_tweets_db():
                     data = json.load(file)
                     insert_tweets = []
                     for tweet in data:
-                        insert_tweets.append((tweet["tweet"]["id"], get_tweet_type(tweet["tweet"]["full_text"])))
+                        dt = datetime.strptime(tweet["tweet"]["created_at"], r"%a %b %d %X %z %Y").date()
+                        if config.start_date is not None and not check_tweet_date(dt):
+                            continue
+                        insert_tweets.append((tweet["tweet"]["id"], get_tweet_type(tweet["tweet"]["full_text"]), dt))
                     cur.executemany(
-                        "INSERT OR IGNORE INTO tweets (id, type) VALUES (?, ?)",
+                        "INSERT OR IGNORE INTO tweets (id, type, created_at) VALUES (?, ?, ?)",
                         insert_tweets
                     )
                 logger.info("Tweet information added to database")
