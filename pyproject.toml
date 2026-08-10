@@ -1,0 +1,20 @@
+[project]
+name = "deletetweets"
+version = "0.1.0"
+description = "A script to delete tweets from X (formerly Twitter) automatically using Selenium"
+readme = "README.md"
+authors = [
+    { name = "anna-davydova", email = "davydova.anna@outlook.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "selenium>=4.47.0",
+    "undetected-chromedriver>=3.5.5",
+]
+
+[project.scripts]
+deletetweets = "deletetweets:main"
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
